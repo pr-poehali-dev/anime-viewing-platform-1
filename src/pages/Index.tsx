@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -11,90 +11,166 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { api, Anime, User } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 
-const mockAnime = [
-  {
-    id: 1,
-    title: 'Sword Art Online',
-    cover: 'https://cdn.poehali.dev/projects/f11f0a86-31f6-43fa-a84e-d173e4c010e3/files/5a0fab5f-7ffd-42c0-ae48-f5f2d231fe67.jpg',
-    rating: 8.5,
-    year: 2024,
-    episodes: 24,
-    genres: ['Экшен', 'Фэнтези', 'Приключения'],
-    description: 'Киригая Кадзуто попадает в виртуальную реальность, где единственный способ выжить — победить всех боссов.',
-    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-  },
-  {
-    id: 2,
-    title: 'Attack on Titan',
-    cover: 'https://cdn.poehali.dev/projects/f11f0a86-31f6-43fa-a84e-d173e4c010e3/files/a9ee8f94-bcbc-499d-8016-eebee0a657d4.jpg',
-    rating: 9.1,
-    year: 2024,
-    episodes: 12,
-    genres: ['Экшен', 'Драма', 'Фантастика'],
-    description: 'Человечество оказалось на грани вымирания из-за появления гигантских титанов.',
-    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-  },
-  {
-    id: 3,
-    title: 'Demon Slayer',
-    cover: 'https://cdn.poehali.dev/projects/f11f0a86-31f6-43fa-a84e-d173e4c010e3/files/9e7dcc3b-0027-456f-8188-8af82d361ff8.jpg',
-    rating: 8.7,
-    year: 2023,
-    episodes: 26,
-    genres: ['Экшен', 'Сёнен', 'Драма'],
-    description: 'История мальчика, который становится охотником на демонов после трагедии.',
-    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-  },
-  {
-    id: 4,
-    title: 'Jujutsu Kaisen',
-    cover: 'https://cdn.poehali.dev/projects/f11f0a86-31f6-43fa-a84e-d173e4c010e3/files/5a0fab5f-7ffd-42c0-ae48-f5f2d231fe67.jpg',
-    rating: 8.9,
-    year: 2024,
-    episodes: 24,
-    genres: ['Экшен', 'Сверхъестественное', 'Сёнен'],
-    description: 'Юджи Итадори вступает в тайный мир магов-заклинателей.',
-    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-  },
-  {
-    id: 5,
-    title: 'My Hero Academia',
-    cover: 'https://cdn.poehali.dev/projects/f11f0a86-31f6-43fa-a84e-d173e4c010e3/files/a9ee8f94-bcbc-499d-8016-eebee0a657d4.jpg',
-    rating: 8.4,
-    year: 2024,
-    episodes: 25,
-    genres: ['Экшен', 'Супергерои', 'Приключения'],
-    description: 'В мире, где у большинства людей есть суперспособности, мальчик без них мечтает стать героем.',
-    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-  },
-  {
-    id: 6,
-    title: 'One Punch Man',
-    cover: 'https://cdn.poehali.dev/projects/f11f0a86-31f6-43fa-a84e-d173e4c010e3/files/9e7dcc3b-0027-456f-8188-8af82d361ff8.jpg',
-    rating: 8.8,
-    year: 2023,
-    episodes: 12,
-    genres: ['Экшен', 'Комедия', 'Сёнен'],
-    description: 'Сайтама настолько силён, что побеждает любого врага одним ударом.',
-    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-  }
-];
-
-const allGenres = ['Все', 'Экшен', 'Фэнтези', 'Драма', 'Комедия', 'Романтика', 'Сёнен'];
+const allGenres = ['Все', 'Экшен', 'Фэнтези', 'Драма', 'Комедия', 'Романтика', 'Сёнен', 'Приключения', 'Фантастика', 'Сверхъестественное', 'Супергерои'];
 
 export default function Index() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('Все');
-  const [selectedAnime, setSelectedAnime] = useState<typeof mockAnime[0] | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [selectedAnime, setSelectedAnime] = useState<Anime | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [showLogin, setShowLogin] = useState(false);
-
-  const filteredAnime = mockAnime.filter(anime => {
-    const matchesSearch = anime.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesGenre = selectedGenre === 'Все' || anime.genres.includes(selectedGenre);
-    return matchesSearch && matchesGenre;
+  const [showRegister, setShowRegister] = useState(false);
+  const [showAddAnime, setShowAddAnime] = useState(false);
+  const [animeList, setAnimeList] = useState<Anime[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [newAnime, setNewAnime] = useState({
+    title: '',
+    description: '',
+    cover: '',
+    videoUrl: '',
+    rating: 0,
+    year: 2024,
+    episodes: 1,
+    genres: [] as string[]
   });
+  
+  const { toast } = useToast();
+
+  useEffect(() => {
+    checkAuth();
+    loadAnime();
+  }, []);
+
+  useEffect(() => {
+    loadAnime();
+  }, [searchQuery, selectedGenre]);
+
+  const checkAuth = async () => {
+    const result = await api.verifyToken();
+    if (result.valid && result.user) {
+      setUser(result.user);
+    }
+  };
+
+  const loadAnime = async () => {
+    try {
+      setLoading(true);
+      const anime = await api.getAnime(searchQuery || undefined, selectedGenre);
+      setAnimeList(anime);
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось загрузить аниме',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogin = async () => {
+    try {
+      const result = await api.login(loginForm.username, loginForm.password);
+      setUser(result.user);
+      setShowLogin(false);
+      setLoginForm({ username: '', password: '' });
+      toast({
+        title: 'Успешно',
+        description: `Добро пожаловать, ${result.user.username}!`
+      });
+    } catch (error) {
+      toast({
+        title: 'Ошибка входа',
+        description: error instanceof Error ? error.message : 'Неверные данные',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleRegister = async () => {
+    try {
+      const result = await api.register(loginForm.username, loginForm.password);
+      setUser(result.user);
+      setShowRegister(false);
+      setLoginForm({ username: '', password: '' });
+      toast({
+        title: 'Успешно',
+        description: 'Аккаунт создан!'
+      });
+    } catch (error) {
+      toast({
+        title: 'Ошибка регистрации',
+        description: error instanceof Error ? error.message : 'Не удалось создать аккаунт',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleLogout = () => {
+    api.logout();
+    setUser(null);
+    toast({
+      title: 'Выход',
+      description: 'Вы вышли из аккаунта'
+    });
+  };
+
+  const handleAddAnime = async () => {
+    try {
+      await api.createAnime(newAnime);
+      setShowAddAnime(false);
+      setNewAnime({
+        title: '',
+        description: '',
+        cover: '',
+        videoUrl: '',
+        rating: 0,
+        year: 2024,
+        episodes: 1,
+        genres: []
+      });
+      loadAnime();
+      toast({
+        title: 'Успешно',
+        description: 'Аниме добавлено!'
+      });
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: error instanceof Error ? error.message : 'Не удалось добавить аниме',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleAddToFavorites = async (animeId: number) => {
+    if (!user) {
+      toast({
+        title: 'Требуется авторизация',
+        description: 'Войдите, чтобы добавить в избранное',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      await api.addToFavorites(animeId);
+      toast({
+        title: 'Успешно',
+        description: 'Добавлено в избранное'
+      });
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: error instanceof Error ? error.message : 'Не удалось добавить',
+        variant: 'destructive'
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -112,20 +188,36 @@ export default function Index() {
                   <Icon name="Film" className="mr-2 h-4 w-4" />
                   Каталог
                 </Button>
-                <Button variant="ghost" className="text-foreground">
-                  <Icon name="Heart" className="mr-2 h-4 w-4" />
-                  Избранное
-                </Button>
+                {user && (
+                  <Button variant="ghost" className="text-foreground">
+                    <Icon name="Heart" className="mr-2 h-4 w-4" />
+                    Избранное
+                  </Button>
+                )}
               </nav>
             </div>
             <div className="flex items-center gap-3">
-              <Button
-                variant={isAdmin ? "default" : "outline"}
-                onClick={() => setShowLogin(true)}
-              >
-                <Icon name="User" className="mr-2 h-4 w-4" />
-                {isAdmin ? 'Админ' : 'Войти'}
-              </Button>
+              {user ? (
+                <>
+                  <span className="text-sm text-muted-foreground hidden md:block">
+                    {user.username} {user.isAdmin && '(Админ)'}
+                  </span>
+                  <Button variant="outline" onClick={handleLogout}>
+                    <Icon name="LogOut" className="mr-2 h-4 w-4" />
+                    Выйти
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="outline" onClick={() => setShowLogin(true)}>
+                    <Icon name="User" className="mr-2 h-4 w-4" />
+                    Войти
+                  </Button>
+                  <Button onClick={() => setShowRegister(true)}>
+                    Регистрация
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -161,7 +253,7 @@ export default function Index() {
           </div>
         </div>
 
-        {isAdmin && (
+        {user?.isAdmin && (
           <Card className="mb-8 border-primary/50 bg-card/50">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -169,7 +261,7 @@ export default function Index() {
                   <h3 className="text-lg font-semibold mb-2">Админ-панель</h3>
                   <p className="text-muted-foreground">Управление контентом платформы</p>
                 </div>
-                <Button className="bg-primary hover:bg-primary/90">
+                <Button className="bg-primary hover:bg-primary/90" onClick={() => setShowAddAnime(true)}>
                   <Icon name="Plus" className="mr-2 h-4 w-4" />
                   Добавить аниме
                 </Button>
@@ -182,11 +274,13 @@ export default function Index() {
           <h2 className="text-2xl font-bold mb-2">
             {searchQuery || selectedGenre !== 'Все' ? 'Результаты' : 'Популярное аниме'}
           </h2>
-          <p className="text-muted-foreground">Найдено аниме: {filteredAnime.length}</p>
+          <p className="text-muted-foreground">
+            {loading ? 'Загрузка...' : `Найдено аниме: ${animeList.length}`}
+          </p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-          {filteredAnime.map((anime) => (
+          {animeList.map((anime) => (
             <Card
               key={anime.id}
               className="group cursor-pointer overflow-hidden border-border hover:border-primary transition-all hover:shadow-lg hover:shadow-primary/20 animate-fade-in"
@@ -243,7 +337,7 @@ export default function Index() {
                     />
                   </div>
                   <div className="flex gap-2">
-                    <Button className="flex-1">
+                    <Button className="flex-1" onClick={() => handleAddToFavorites(selectedAnime.id)}>
                       <Icon name="Heart" className="mr-2 h-4 w-4" />
                       В избранное
                     </Button>
@@ -300,24 +394,152 @@ export default function Index() {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium mb-2 block">Логин</label>
-              <Input placeholder="Введите логин" />
+              <Input
+                placeholder="Введите логин"
+                value={loginForm.username}
+                onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+              />
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">Пароль</label>
-              <Input type="password" placeholder="Введите пароль" />
+              <Input
+                type="password"
+                placeholder="Введите пароль"
+                value={loginForm.password}
+                onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+              />
             </div>
-            <Button
-              className="w-full"
-              onClick={() => {
-                setIsAdmin(true);
-                setShowLogin(false);
-              }}
-            >
+            <Button className="w-full" onClick={handleLogin}>
               Войти
             </Button>
             <p className="text-xs text-muted-foreground text-center">
-              Демо: введите любые данные для входа как администратор
+              Демо админ: admin / admin123
             </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showRegister} onOpenChange={setShowRegister}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Регистрация</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Логин</label>
+              <Input
+                placeholder="Придумайте логин"
+                value={loginForm.username}
+                onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">Пароль</label>
+              <Input
+                type="password"
+                placeholder="Придумайте пароль (минимум 6 символов)"
+                value={loginForm.password}
+                onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+              />
+            </div>
+            <Button className="w-full" onClick={handleRegister}>
+              Зарегистрироваться
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAddAnime} onOpenChange={setShowAddAnime}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Добавить аниме</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Название</label>
+              <Input
+                placeholder="Название аниме"
+                value={newAnime.title}
+                onChange={(e) => setNewAnime({ ...newAnime, title: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">Описание</label>
+              <Input
+                placeholder="Краткое описание"
+                value={newAnime.description}
+                onChange={(e) => setNewAnime({ ...newAnime, description: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">URL обложки</label>
+              <Input
+                placeholder="https://..."
+                value={newAnime.cover}
+                onChange={(e) => setNewAnime({ ...newAnime, cover: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">URL видео</label>
+              <Input
+                placeholder="https://www.youtube.com/embed/..."
+                value={newAnime.videoUrl}
+                onChange={(e) => setNewAnime({ ...newAnime, videoUrl: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Рейтинг</label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="10"
+                  value={newAnime.rating}
+                  onChange={(e) => setNewAnime({ ...newAnime, rating: parseFloat(e.target.value) })}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Год</label>
+                <Input
+                  type="number"
+                  value={newAnime.year}
+                  onChange={(e) => setNewAnime({ ...newAnime, year: parseInt(e.target.value) })}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Эпизоды</label>
+                <Input
+                  type="number"
+                  value={newAnime.episodes}
+                  onChange={(e) => setNewAnime({ ...newAnime, episodes: parseInt(e.target.value) })}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">Жанры</label>
+              <div className="flex flex-wrap gap-2">
+                {allGenres.filter(g => g !== 'Все').map((genre) => (
+                  <Badge
+                    key={genre}
+                    variant={newAnime.genres.includes(genre) ? "default" : "outline"}
+                    className="cursor-pointer"
+                    onClick={() => {
+                      if (newAnime.genres.includes(genre)) {
+                        setNewAnime({ ...newAnime, genres: newAnime.genres.filter(g => g !== genre) });
+                      } else {
+                        setNewAnime({ ...newAnime, genres: [...newAnime.genres, genre] });
+                      }
+                    }}
+                  >
+                    {genre}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+            <Button className="w-full" onClick={handleAddAnime}>
+              Добавить
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
